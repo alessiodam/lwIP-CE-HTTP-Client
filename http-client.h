@@ -20,7 +20,7 @@
 extern "C" {
 #endif
 
-typedef void (*http_client_callback_t)(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err);
+typedef void (*http_client_callback_t)(struct pbuf *p, err_t err);
 
 typedef enum {
     HTTP_GET,
