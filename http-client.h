@@ -32,25 +32,23 @@ typedef enum {
 
 /// @brief Sends an HTTP request
 /// @param method HTTP method, GET, POST, PUT, DELETE, HEAD
-/// @param netif Network interface to use
-/// @param server_ip The ASCII representation of the IP address of the server, example: "237.84.2.178"
+/// @param host The host to connect to, can be an IP address in ASCII representation OR a domain, a DNS lookup will be performed if needed.
 /// @param server_port The port of the server, example: 80
 /// @param path URL to request, example: "/index.html"
 /// @param headers Request headers, example: "Content-Type: text/html\r\nAccept: */*\r\n"
 /// @param body Request body, example: "Hello, World!"
 /// @param buf_len Size of the buffer
-/// @param http_client_callback Callback function for received HTTP data.
-/// @return 
+/// @param callback Callback function for received HTTP data.
+/// @return An lwIP error code.
 err_t http_request(
     http_method_t method,
-    struct netif *netif,
-    const char *server_ip,
+    const char *host,
     uint16_t server_port,
     const char *path,
     const char *headers,
     const char *body,
     unsigned int buf_len,
-    http_client_callback_t http_client_callback
+    http_client_callback_t callback
 );
 
 #ifdef __cplusplus

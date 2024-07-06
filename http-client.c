@@ -1,12 +1,15 @@
 #include "http-client.h"
 
-static http_client_callback_t http_callback = NULL;
+http_client_callback_t user_http_callback = NULL;
 
-static err_t http_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
-    printf("HTTP rcv:\n%.*s\n", p->len, (char *)p->payload);
+err_t http_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
+    printf("http_recv start\n");
 
-    if (http_callback) {
-        http_callback(p, err);
+    printf("http_recv size: %d\n", p->len);
+
+    if (user_http_callback) {
+        printf("Calling user callback\n");
+        user_http_callback(p, err);
     }
 
     if (p == NULL) {
@@ -17,10 +20,14 @@ static err_t http_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t e
         altcp_recved(pcb, p->len);
         pbuf_free(p);
     }
+    printf("http_recv done\n");
     return ERR_OK;
 }
 
-static err_t http_connected(void *arg, struct altcp_pcb *pcb, err_t err) {
+
+
+err_t http_connected(void *arg, struct altcp_pcb *pcb, err_t err) {
+    printf("http_connected start\n");
     if (err != ERR_OK) {
         printf("Error connecting: %d\n", err);
         return err;
@@ -34,32 +41,33 @@ static err_t http_connected(void *arg, struct altcp_pcb *pcb, err_t err) {
     altcp_output(pcb);
     altcp_recv(pcb, http_recv);
     altcp_write(pcb, request, strlen(request), TCP_WRITE_FLAG_COPY);
+    printf("http_connected done\n");
     return ERR_OK;
 }
 
 err_t http_request(
     http_method_t method,
-    struct netif *netif,
-    const char *server_ip,
+    const char *host,
     uint16_t server_port,
     const char *path,
     const char *headers,
     const char *body,
     unsigned int buf_len,
-    http_client_callback_t http_client_callback
+    http_client_callback_t callback
 ) {
+    printf("http_request start\n");
+    user_http_callback = callback;
+
     struct altcp_pcb *pcb = altcp_tcp_new_ip_type(IPADDR_TYPE_V4);
-    ip4_addr_t ip;
-    if (!ip4addr_aton(server_ip, &ip)) {
+    ip4_addr_t host_ip;
+    if (!ip4addr_aton(host, &host_ip)) {
         printf("Invalid IP address\n");
+        printf("implement DNS lookup here at line %d\n", __LINE__);
         return ERR_VAL;
     }
-    
-    printf("Server IP: %s, Port: %d\n", server_ip, server_port);
 
-    http_callback = http_client_callback;
+    printf("Server IP: %s, Port: %d\n", host, server_port);
 
-    char request[buf_len];
     const char *method_str;
     switch (method) {
         case HTTP_GET: method_str = "GET"; break;
@@ -70,28 +78,26 @@ err_t http_request(
         default: return ERR_VAL;
     }
 
-    if (method == HTTP_POST || method == HTTP_PUT) {
-        snprintf(request, sizeof(request),
-                 "%s %s HTTP/1.1\r\n"
-                 "Host: %s\r\n"
-                 "%s"
-                 "Content-Length: %d\r\n"
-                 "Connection: close\r\n\r\n"
-                 "%s",
-                 method_str, path, server_ip, headers, body ? (int)strlen(body) : 0, body ? body : "");
-    } else {
-        snprintf(request, sizeof(request),
-                 "%s %s HTTP/1.1\r\n"
-                 "Host: %s\r\n"
-                 "%s"
-                 "Connection: close\r\n\r\n",
-                 method_str, path, server_ip, headers);
-    }
+    char host_ip_str[IP4ADDR_STRLEN_MAX];
+    ip4addr_ntoa_r(&host_ip, host_ip_str, IP4ADDR_STRLEN_MAX);
 
-    printf("HTTP Request:\n%s\n", request);
+    char request[buf_len];
+    snprintf(
+        request,
+        sizeof(request),
+        "%s %s HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "%s"
+        "Content-Length: %d\r\n"
+        "Connection: close\r\n\r\n"
+        "%s",
+        method_str, path, host_ip_str, headers, body ? (int)strlen(body) : 0, body ? body : ""
+    );
 
-    altcp_connect(pcb, (ip_addr_t *)&ip, server_port, http_connected);
+    printf("http_request sending\n");
+    altcp_connect(pcb, (ip_addr_t *)&host_ip, server_port, http_connected);
     altcp_arg(pcb, request);
 
+    printf("http_request done\n");
     return ERR_OK;
 }
