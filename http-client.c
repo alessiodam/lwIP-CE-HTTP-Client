@@ -1,6 +1,33 @@
+/*
+ *--------------------------------------
+ * Program Name: lwIP-CE HTTP Client
+ * Author: TKB Studios
+ * License: MIT License 
+ * Description: An HTTP Client for lwIP-CE
+ *--------------------------------------
+*/
+
 #include "http-client.h"
 
 http_client_callback_t user_http_callback = NULL;
+
+bool wait_for_dns_resolution = false;
+long long dns_resolution_time_start = 0;
+ip_addr_t dns_ipaddr;
+
+void http_handle_all_events()
+{
+    usb_HandleEvents();       // usb events
+    sys_check_timeouts();     // lwIP timers/event callbacks
+}
+
+
+void http_dns_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg)
+{
+    printf("DNS callback: %s\n", name);
+    dns_ipaddr = *ipaddr;
+    wait_for_dns_resolution = false;
+}
 
 err_t http_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
     printf("http_recv start\n");
@@ -23,8 +50,6 @@ err_t http_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
     printf("http_recv done\n");
     return ERR_OK;
 }
-
-
 
 err_t http_connected(void *arg, struct altcp_pcb *pcb, err_t err) {
     printf("http_connected start\n");
@@ -62,11 +87,38 @@ err_t http_request(
     ip4_addr_t host_ip;
     if (!ip4addr_aton(host, &host_ip)) {
         printf("Invalid IP address\n");
-        printf("implement DNS lookup here at line %d\n", __LINE__);
-        return ERR_VAL;
+
+        // attempt DNS resolution
+        dns_init();
+        err_t dns_resolution_err = dns_gethostbyname(host, (ip_addr_t *)&host_ip, http_dns_callback, NULL);
+        switch (dns_resolution_err) {
+            case ERR_OK:
+                printf("DNS resolution successful\n");
+                break;
+            case ERR_INPROGRESS:
+                printf("DNS resolution in progress\n");
+                dns_resolution_time_start = clock() * 1000 / CLOCKS_PER_SEC;
+                wait_for_dns_resolution = true;
+                while (wait_for_dns_resolution)
+                {
+                    if ((clock() * 1000 / CLOCKS_PER_SEC) - dns_resolution_time_start > 16000) // 16 second timeout
+                    {
+                        printf("DNS resolution timed out\n");
+                        return ERR_TIMEOUT;
+                    }
+                    http_handle_all_events();
+                }
+                printf("DNS resolution done\n");
+                break;
+            default:
+                printf("DNS resolution failed, code: %d\n", dns_resolution_err);
+                return ERR_VAL;
+        }
     }
 
-    printf("Server IP: %s, Port: %d\n", host, server_port);
+    char ip_addr_str[IP4ADDR_STRLEN_MAX];
+    ip4addr_ntoa_r(&host_ip, ip_addr_str, IP4ADDR_STRLEN_MAX);
+    printf("Host IP: %s\n", ip_addr_str);
 
     const char *method_str;
     switch (method) {
@@ -78,8 +130,13 @@ err_t http_request(
         default: return ERR_VAL;
     }
 
-    char host_ip_str[IP4ADDR_STRLEN_MAX];
-    ip4addr_ntoa_r(&host_ip, host_ip_str, IP4ADDR_STRLEN_MAX);
+    /* 
+     * This won't work
+     * for some reason, when getting an IP address from DNS,
+     * the request will never be sent to the IP of the server for some reason
+     * wasted half an hour here. 1:23 AM, 07/07/2024, I'm bored and sleepy
+     * so see you tomorrow obscure code
+    */
 
     char request[buf_len];
     snprintf(
@@ -91,7 +148,7 @@ err_t http_request(
         "Content-Length: %d\r\n"
         "Connection: close\r\n\r\n"
         "%s",
-        method_str, path, host_ip_str, headers, body ? (int)strlen(body) : 0, body ? body : ""
+        method_str, path, host, headers, body ? (int)strlen(body) : 0, body ? body : ""
     );
 
     printf("http_request sending\n");

@@ -2,7 +2,7 @@
  *--------------------------------------
  * Program Name: lwIP-CE HTTP Client
  * Author: TKB Studios
- * License: Apache License 2.0
+ * License: MIT License
  * Description: An HTTP Client for lwIP-CE
  *--------------------------------------
 */
@@ -10,11 +10,14 @@
 #ifndef HTTPCLIENT_H
 #define HTTPCLIENT_H
 
+#include <usbdrvce.h>
 #include <stdbool.h>
 #include <time.h>
 
+#include "lwip/timeouts.h"
 #include "lwip/altcp.h"
 #include "lwip/altcp_tcp.h"
+#include "lwip/dns.h"
 
 #ifdef __cplusplus
 extern "C" {
