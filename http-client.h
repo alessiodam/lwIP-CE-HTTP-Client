@@ -37,7 +37,7 @@ typedef enum {
 /// @param path URL to request, example: "/index.html"
 /// @param headers Request headers, example: "Content-Type: text/html\r\nAccept: */*\r\n"
 /// @param body Request body, example: "Hello, World!"
-/// @param buf_len Size of the buffer
+/// @param buf_len Size of the request buffer, not the response one.
 /// @param callback Callback function for received HTTP data.
 /// @return An lwIP error code.
 err_t http_request(
