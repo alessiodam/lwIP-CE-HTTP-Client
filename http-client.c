@@ -80,12 +80,20 @@ err_t http_request(
     unsigned int buf_len,
     http_client_callback_t callback
 ) {
+    if (!host || !path || !headers || !callback) {
+        return ERR_VAL;
+    }
+
     printf("http_request start\n");
     user_http_callback = callback;
 
     struct altcp_pcb *pcb = altcp_tcp_new_ip_type(IPADDR_TYPE_V4);
-    ip4_addr_t host_ip;
-    if (!ip4addr_aton(host, &host_ip)) {
+    if (!pcb) {
+        return ERR_MEM;
+    }
+
+    ip_addr_t host_ip;
+    if (!ipaddr_aton(host, &host_ip)) {
         printf("Invalid IP address\n");
 
         // attempt DNS resolution
@@ -112,12 +120,12 @@ err_t http_request(
                 break;
             default:
                 printf("DNS resolution failed, code: %d\n", dns_resolution_err);
-                return ERR_VAL;
+            return dns_resolution_err;
         }
     }
 
-    char ip_addr_str[IP4ADDR_STRLEN_MAX];
-    ip4addr_ntoa_r(&host_ip, ip_addr_str, IP4ADDR_STRLEN_MAX);
+    char ip_addr_str[IPADDR_STRLEN_MAX];
+    ipaddr_ntoa_r(&host_ip, ip_addr_str, IPADDR_STRLEN_MAX);
     printf("Host IP: %s\n", ip_addr_str);
 
     const char *method_str;
@@ -130,29 +138,23 @@ err_t http_request(
         default: return ERR_VAL;
     }
 
-    /* 
-     * This won't work
-     * for some reason, when getting an IP address from DNS,
-     * the request will never be sent to the IP of the server for some reason
-     * wasted half an hour here. 1:23 AM, 07/07/2024, I'm bored and sleepy
-     * so see you tomorrow obscure code
-    */
-
     char request[buf_len];
     snprintf(
         request,
         sizeof(request),
         "%s %s HTTP/1.1\r\n"
         "Host: %s\r\n"
+        "User-Agent: tkbstudios/lwIP-CE-HTTP-Client version 1.0 (TI-84 Plus CE)\r\n"
         "%s"
         "Content-Length: %d\r\n"
         "Connection: close\r\n\r\n"
         "%s",
         method_str, path, host, headers, body ? (int)strlen(body) : 0, body ? body : ""
     );
+    printf("Request:\n%s\n", request);
 
     printf("http_request sending\n");
-    altcp_connect(pcb, (ip_addr_t *)&host_ip, server_port, http_connected);
+    altcp_connect(pcb, &host_ip, server_port, http_connected);
     altcp_arg(pcb, request);
 
     printf("http_request done\n");
