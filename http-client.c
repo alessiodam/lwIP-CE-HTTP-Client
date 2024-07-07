@@ -63,9 +63,9 @@ err_t http_connected(void *arg, struct altcp_pcb *pcb, err_t err) {
     char *request = (char *)arg;
     printf("Sending HTTP request:\n%s\n", request);
 
-    altcp_output(pcb);
     altcp_recv(pcb, http_recv);
     altcp_write(pcb, request, strlen(request), TCP_WRITE_FLAG_COPY);
+    altcp_output(pcb);
     printf("http_connected done\n");
     return ERR_OK;
 }
